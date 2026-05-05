@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trova il Punto Vendita - MP Italia</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--red:#c0392b;--bg:#fdf9f9;--card:#fff;--border:#e8e0e0;--text:#1a1a1a;--muted:#888}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+.hero{background:var(--red);color:#fff;padding:36px 24px 28px;text-align:center}
+.logo{width:64px;height:64px;border-radius:50%;background:#fff;margin:0 auto 16px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;color:var(--red)}
+.hero h1{font-size:22px;font-weight:600;margin-bottom:6px}
+.hero p{font-size:13px;opacity:.85}
+.locate-btn{display:block;margin:20px auto 0;background:#fff;color:var(--red);border:none;padding:12px 28px;font-size:14px;font-weight:600;border-radius:24px;cursor:pointer;font-family:inherit}
+.locate-btn:hover{background:#ffe8e6}
+.locate-btn:disabled{opacity:.6;cursor:default}
+.main{max-width:600px;margin:0 auto;padding:20px 16px 60px}
+.nearest-label,.all-label{font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;margin:20px 0 10px}
+.nearest-label{color:var(--red)}
+.all-label{color:var(--muted)}
+.card{background:var(--card);border:1.5px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px;position:relative}
+.card.nearest{border-color:var(--red);box-shadow:0 2px 12px rgba(192,57,43,.12)}
+.badge{position:absolute;top:12px;right:12px;background:var(--red);color:#fff;font-size:10px;font-weight:700;padding:3px 9px;border-radius:12px}
+.card h3{font-size:15px;font-weight:600;margin-bottom:4px;padding-right:60px}
+.addr{font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.5}
+.dist{font-size:12px;font-weight:500;color:var(--red);margin-bottom:10px}
+.card-actions{display:flex;gap:8px}
+.btn{flex:1;padding:9px 4px;border-radius:8px;border:1.5px solid var(--border);font-size:12px;font-weight:600;cursor:pointer;text-align:center;text-decoration:none;font-family:inherit;background:#fff;color:var(--text)}
+.btn.primary{background:var(--red);color:#fff;border-color:var(--red)}
+.loading{display:flex;align-items:center;justify-content:center;gap:8px;padding:40px;color:var(--muted);font-size:13px}
+.spinner{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--red);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.error{text-align:center;padding:32px;color:var(--red);font-size:13px}
+.updated{text-align:center;font-size:11px;color:var(--muted);margin-top:24px}
+</style>
+</head>
+<body>
+<div class="hero">
+<div class="logo">MP</div>
+<h1>Trova il Punto Vendita</h1>
+<p>Scopri il distributore MP piu vicino a te</p>
+<button class="locate-btn" id="locateBtn" onclick="locateMe()">Trova vicino a me</button>
+</div>
+<div class="main">
+<div class="loading" id="loading"><div class="spinner"></div>Caricamento...</div>
+<div id="content" style="display:none"></div>
+<div class="updated" id="updated"></div>
+</div>
+<script>
+var CSV='https://docs.google.com/spreadsheets/d/1mjBg2DFH8L7zLOrV01ZuljiW7bchjQKNWSqN1LklnMU/export?format=csv&sheet=Places';
+var places=[],uLat=null,uLng=null;
+function parseCSV(t){
+  var lines=t.trim().split('\n'),h=lines[0].split(',').map(function(x){return x.replace(/"/g,'').trim();});
+  return lines.slice(1).map(function(line){
+    var vals=[],cur='',inQ=false;
+    for(var i=0;i<line.length;i++){var c=line[i];if(c==='"'){inQ=!inQ;}else if(c===','&&!inQ){vals.push(cur.trim());cur='';}else{cur+=c;}}
+    vals.push(cur.trim());
+    var o={};h.forEach(function(k,i){o[k]=vals[i]||'';});return o;
+  }).filter(function(p){return p.name&&p.lat&&p.lng;});
+}
+function hav(a,b,c,d){var R=6371,dA=(c-a)*Math.PI/180,dB=(d-b)*Math.PI/180,x=Math.sin(dA/2)*Math.sin(dA/2)+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dB/2)*Math.sin(dB/2);return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));}
+function fmtD(k){return k<1?Math.round(k*1000)+'m':k<10?k.toFixed(1)+'km':Math.round(k)+'km';}
+function mLink(p){return 'https://maps.google.com/?q='+encodeURIComponent(p.lat+','+p.lng);}
+function rLink(p){return 'https://maps.google.com/maps/dir/?api=1&destination='+encodeURIComponent(p.lat+','+p.lng);}
+function card(p,n){
+  var a=p.address||p.short_address||'';
+  var d=p.dist!=null?'<div class="dist">'+fmtD(p.dist)+' di distanza</div>':'';
+  return '<div class="card'+(n?' nearest':'')+'">'+
+    (n?'<span class="badge">PIU VICINO</span>':'')+
+    '<h3>'+p.name+'</h3>'+(a?'<div class="addr">'+a+'</div>':'')+d+
+    '<div class="card-actions"><a class="btn primary" href="'+mLink(p)+'" target="_blank">Vedi su Maps</a>'+
+    '<a class="btn" href="'+rLink(p)+'" target="_blank">Indicazioni</a></div></div>';
+}
+function render(){
+  var el=document.getElementById('content');
+  if(!places.length){el.innerHTML='<div class="error">Nessun punto vendita trovato.</div>';el.style.display='block';return;}
+  var s=places.slice();
+  if(uLat!==null){s.forEach(function(p){p.dist=hav(uLat,uLng,parseFloat(p.lat),parseFloat(p.lng));});s.sort(function(a,b){return a.dist-b.dist;});}
+  var h='';
+  if(uLat!==null&&s.length){
+    h+='<div class="nearest-label">Il piu vicino a te</div>'+card(s[0],true);
+    if(s.length>1){h+='<div class="all-label">Tutti i punti vendita</div>';s.slice(1).forEach(function(p){h+=card(p,false);});}
+  }else{
+    h+='<div class="all-label">Tutti i punti vendita ('+s.length+')</div>';
+    s.forEach(function(p){h+=card(p,false);});
+  }
+  el.innerHTML=h;el.style.display='block';
+}
+function locateMe(){
+  var b=document.getElementById('locateBtn');b.disabled=true;b.textContent='Localizzazione...';
+  if(!navigator.geolocation){b.textContent='Non disponibile';return;}
+  navigator.geolocation.getCurrentPosition(function(pos){
+    uLat=pos.coords.latitude;uLng=pos.coords.longitude;
+    b.textContent='Posizione trovata';b.style.background='#d4edda';b.style.color='#155724';render();
+  },function(){b.disabled=false;b.textContent='Riprova';});
+}
+fetch(CSV).then(function(r){return r.text();}).then(function(t){
+  places=parseCSV(t);
+  document.getElementById('loading').style.display='none';
+  var d=places[0]&&places[0].updated_at?new Date(places[0].updated_at).toLocaleDateString('it-IT'):'';
+  if(d)document.getElementById('updated').textContent='Ultimo aggiornamento: '+d;
+  render();
+}).catch(function(){document.getElementById('loading').innerHTML='<div class="error">Errore caricamento.</div>';});
+</script>
+</body>
+</html>
