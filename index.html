@@ -49,7 +49,10 @@ body{font-family:'Inter',-apple-system,sans-serif;background:var(--bg);color:var
 <div class="updated" id="updated"></div>
 </div>
 <script>
-var CSV='https://docs.google.com/spreadsheets/d/1mjBg2DFH8L7zLOrV01ZuljiW7bchjQKNWSqN1LklnMU/export?format=csv&sheet=Places';
+var SHEET_ID='1mjBg2DFH8L7zLOrV01ZuljiW7bchjQKNWSqN1LklnMU';
+var SHEET_NAME='Places';
+var CSV_URL='https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/export?format=csv&sheet='+SHEET_NAME;
+var PROXY='https://api.allorigins.win/raw?url=';
 var places=[],uLat=null,uLng=null;
 function parseCSV(t){
   var lines=t.trim().split('\n'),h=lines[0].split(',').map(function(x){return x.replace(/"/g,'').trim();});
@@ -96,13 +99,25 @@ function locateMe(){
     b.textContent='Posizione trovata';b.style.background='#d4edda';b.style.color='#155724';render();
   },function(){b.disabled=false;b.textContent='Riprova';});
 }
-fetch(CSV).then(function(r){return r.text();}).then(function(t){
-  places=parseCSV(t);
-  document.getElementById('loading').style.display='none';
-  var d=places[0]&&places[0].updated_at?new Date(places[0].updated_at).toLocaleDateString('it-IT'):'';
-  if(d)document.getElementById('updated').textContent='Ultimo aggiornamento: '+d;
-  render();
-}).catch(function(){document.getElementById('loading').innerHTML='<div class="error">Errore caricamento.</div>';});
+function loadData(url){
+  return fetch(url).then(function(r){
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return r.text();
+  });
+}
+// Try direct first, fall back to proxy
+loadData(CSV_URL)
+  .catch(function(){return loadData(PROXY+encodeURIComponent(CSV_URL));})
+  .then(function(t){
+    places=parseCSV(t);
+    document.getElementById('loading').style.display='none';
+    var d=places[0]&&places[0].updated_at?new Date(places[0].updated_at).toLocaleDateString('it-IT'):'';
+    if(d)document.getElementById('updated').textContent='Ultimo aggiornamento: '+d;
+    render();
+  })
+  .catch(function(e){
+    document.getElementById('loading').innerHTML='<div class="error">Errore caricamento dati.<br><small>'+e.message+'</small></div>';
+  });
 </script>
 </body>
 </html>
